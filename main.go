@@ -20,6 +20,7 @@ const (
 	dbname   = "bookshop"
 )
 
+// Book struct to represent the book member fields
 type Book struct {
 	ID            string  `json:"id"`
 	Name          string  `json:"name"`
@@ -29,18 +30,21 @@ type Book struct {
 	DatePublished string  `json:"date_published"`
 }
 
+// BooksCollections used to have an array of book
 type BooksCollections struct {
 	Books []Book `json:"books"`
 }
 
 var db *sql.DB
 
+// dataSourceName used to prepare the DSN for SQL
 func dataSourceName(dbName string) string {
 	dsn := fmt.Sprintf("%s:%s@tcp(%s)/%s", username, password, hostname, dbName)
 	log.Println("DataSourceName = ", dsn)
 	return dsn
 }
 
+// dbConnection use to establish the connection and create the database
 func dbConnection(dsn string) (*sql.DB, error) {
 	// open the database - DSN gere is "root:root@tcp(127.0.0.1:3306)/"
 	database, err := sql.Open("mysql", dataSourceName(""))
@@ -99,8 +103,8 @@ func main() {
 		return
 	}
 
+	// create the book table if not exists
 	query := "create table IF NOT EXISTS book(id varchar(36) primary key, name varchar(255) not null, author varchar(255) not null, price decimal(5,2) not null, pages int, date_published date)"
-	// create table
 	result, err := db.Exec(query)
 	if err != nil {
 		log.Println("Received error while creating table = ", err)
@@ -151,7 +155,7 @@ func route() *gin.Engine {
 		c.JSON(http.StatusOK, "Hello.. Welcome!")
 	})
 
-	// CRUD operations for books sql database
+	// REST CRUD operations for books MySQL database
 	r.GET("/books", listBooks)
 	r.POST("/books", createBook)
 	r.DELETE("/books/:id", deleteBook)
@@ -160,6 +164,7 @@ func route() *gin.Engine {
 	return r
 }
 
+// listBooks handler to list of books in json format
 func listBooks(c *gin.Context) {
 	// Execute the query
 	results, err := db.Query("SELECT * FROM book")
@@ -187,12 +192,14 @@ func listBooks(c *gin.Context) {
 	c.JSON(http.StatusOK, books)
 }
 
+// createBook handler to creat the book entry into database
 func createBook(c *gin.Context) {
 	var book Book
 
 	c.BindJSON(&book)
 	fmt.Println(book)
 
+	// prepare and execute query to insert the book values
 	query := "INSERT into book values(?,?,?,?,?,?)"
 	statement, err := db.Prepare(query)
 	if err != nil {
@@ -222,6 +229,7 @@ func createBook(c *gin.Context) {
 	c.JSON(http.StatusCreated, book)
 }
 
+// deleteBook handler to delete the book entry using the uuid
 func deleteBook(c *gin.Context) {
 	id := c.Param("id")
 	fmt.Println("Delete api called and ID = ", id)
@@ -236,11 +244,13 @@ func deleteBook(c *gin.Context) {
 	c.JSON(http.StatusNoContent, nil)
 }
 
+// patchBook handler to patch the book entry using uuid
 func patchBook(c *gin.Context) {
 	id := c.Param("id")
 	fmt.Println("PATCH api called and ID = ", id)
 
-	results, err := db.Query("SELECT * FROM book where id = ?", id)
+	// get the book entry first using uuid. If not respond with not_found
+	results, err := db.Query("SELECT * FROM book where BINARY id = UNHEX(?)", id)
 	if err != nil {
 		fmt.Println("PATCH api failed ID not found")
 		c.JSON(http.StatusNotFound, nil)
@@ -249,6 +259,7 @@ func patchBook(c *gin.Context) {
 	var book Book
 	err = results.Scan(&book.ID, &book.Name, &book.Author, &book.Price, &book.Pages, &book.DatePublished)
 
+	// get the patch request body and extract the values
 	var updates Book
 	c.BindJSON(&updates)
 	fmt.Println("Update req are: ", updates)
@@ -266,6 +277,7 @@ func patchBook(c *gin.Context) {
 		book.DatePublished = updates.DatePublished
 	}
 
+	// prepare the update query and execute it
 	query := "update book set name=?, author=?, price=?, pages=?, date_published=? where id=?"
 	statement, err := db.Prepare(query)
 	if err != nil {
